@@ -1,0 +1,14 @@
+#
+oasdiff
+# goreleaser builds
+dist/**
+
+# Output of the go coverage tool
+*.out
+coverage.html
+
+# vscode files
+.vscode/*
+
+# Claude
+.claude/*

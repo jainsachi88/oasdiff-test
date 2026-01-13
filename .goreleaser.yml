@@ -1,0 +1,78 @@
+builds:
+ - binary: oasdiff
+   goos:
+     - darwin
+     - linux
+     - windows
+   goarch:
+     - amd64
+     - arm64
+   env:
+     - CGO_ENABLED=0
+   ldflags:
+     - -s -w -X github.com/oasdiff/oasdiff/build.Version={{.Version}}
+
+release:
+ prerelease: auto
+
+universal_binaries:
+ - replace: true
+
+brews:
+ -
+   name: oasdiff
+   homepage: "https://github.com/oasdiff/oasdiff"
+   repository:
+     owner: oasdiff
+     name: homebrew-oasdiff
+   commit_author:
+     name: Reuven Harrison
+     email: reuvenharrison@gmail.com
+
+nfpms:
+  # note that this is an array of nfpm configs
+  -
+    # ID of the nfpm config, must be unique.
+    # Defaults to "default".
+    id: oasdiff
+
+    # Name of the package.
+    # Defaults to `ProjectName`.
+    package_name: oasdiff
+
+    # Your app's vendor.
+    # Default is empty.
+    vendor: oasdiff
+
+    # Template to your app's homepage.
+    # Default is empty.
+    homepage: "https://github.com/oasdiff/oasdiff"
+
+    # Your app's maintainer (probably you).
+    # Default is empty.
+    maintainer: Reuven Harrison <reuvenharrison@gmail.com>
+
+    # Template to your app's description.
+    # Default is empty.
+    description: |-
+      A diff tool for OpenAPI Specification.
+
+    # Your app's license.
+    # Default is empty.
+    license: Apache 2.0
+
+    # Formats to be generated.
+    formats:
+      - apk
+      - deb
+      - rpm
+
+    # Section.
+    section: default
+
+    # Priority.
+    priority: extra
+
+
+checksum:
+ name_template: 'checksums.txt'
