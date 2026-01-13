@@ -1,7 +1,6 @@
 package checker
 
 import (
-	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/oasdiff/oasdiff/diff"
 )
 
@@ -41,35 +40,6 @@ func PropertyDeprecationCheck(diffReport *diff.Diff, operationsSources *diff.Ope
 }
 
 // newPropertyApiChange creates a Change for property deprecation with safe dummy values
-func newPropertyApiChange(id string, config *Config, details []any) Change {
-	dummyOp := &openapi3.Operation{}
-	dummySources := &diff.OperationsSourcesMap{}
-	return NewApiChange(
-		id,
-		config,
-		details,
-		"",
-		dummySources, // operationsSources
-		dummyOp,      // op
-		"property",   // operation
-		"schema",     // path
-	)
-}
-
-func getPropertyDeprecatedSunsetMissing(config *Config, schemaName, propName string, prop *openapi3.Schema) Change {
-	dummyOp := &openapi3.Operation{}
-	dummySources := &diff.OperationsSourcesMap{}
-	return NewApiChange(
-		PropertyDeprecatedSunsetMissingId,
-		config,
-		[]any{schemaName, propName},
-		"",
-		dummySources,
-		dummyOp,
-		"property",
-		"schema",
-	)
-}
 
 func traversePropertyDiffs(schemaName, parentPath string, propertyDiffs map[string]*diff.SchemaDiff, result *Changes, config *Config, operationsSources *diff.OperationsSourcesMap) {
 	for propertyName, propertyDiff := range propertyDiffs {
