@@ -16,21 +16,33 @@ const (
 func PropertyDeprecationCheck(diffReport *diff.Diff, operationsSources *diff.OperationsSourcesMap, config *Config) Changes {
 	result := make(Changes, 0)
 	println("[DeprecationCheck] inside function ")
-
-	if diffReport.ComponentsDiff == nil || diffReport.ComponentsDiff.SchemasDiff == nil {
-		println("[DeprecationCheck] No components diff or schemas diff found")
+	if diffReport.PathsDiff == nil {
 		return result
 	}
-	for schemaName, schemaDiff := range diffReport.ComponentsDiff.SchemasDiff.Modified {
-		if schemaDiff.PropertiesDiff != nil && schemaDiff.PropertiesDiff.Modified != nil {
-			traversePropertyDiffs(schemaName, "", schemaDiff.PropertiesDiff.Modified, &result, config, operationsSources)
+	for path, pathItem := range diffReport.PathsDiff.Modified {
+		if pathItem.OperationsDiff == nil {
+			continue
 		}
-		// Always traverse composition branches even if PropertiesDiff.Modified is nil
-		for _, composition := range []*diff.SubschemasDiff{schemaDiff.AllOfDiff, schemaDiff.OneOfDiff, schemaDiff.AnyOfDiff} {
-			if composition != nil && composition.Modified != nil {
-				for _, mod := range composition.Modified {
-					if mod.Diff != nil && mod.Diff.PropertiesDiff != nil && mod.Diff.PropertiesDiff.Modified != nil {
-						traversePropertyDiffs(schemaName, "", mod.Diff.PropertiesDiff.Modified, &result, config, operationsSources)
+		for operation := range pathItem.OperationsDiff.Modified {
+			op := pathItem.Revision.GetOperation(operation)
+			if op == nil {
+				continue
+			}
+			// For each operation, check all schemas in ComponentsDiff
+			if diffReport.ComponentsDiff != nil && diffReport.ComponentsDiff.SchemasDiff != nil {
+				for schemaName, schemaDiff := range diffReport.ComponentsDiff.SchemasDiff.Modified {
+					if schemaDiff.PropertiesDiff != nil && schemaDiff.PropertiesDiff.Modified != nil {
+						traversePropertyDiffs(schemaName, operation, path, schemaDiff.PropertiesDiff.Modified, &result, config, operationsSources)
+					}
+					// Recursively check nested properties in composed schemas in allOf, oneOf, anyOf branches
+					for _, composition := range []*diff.SubschemasDiff{schemaDiff.AllOfDiff, schemaDiff.OneOfDiff, schemaDiff.AnyOfDiff} {
+						if composition != nil && composition.Modified != nil {
+							for _, mod := range composition.Modified {
+								if mod.Diff != nil && mod.Diff.PropertiesDiff != nil && mod.Diff.PropertiesDiff.Modified != nil {
+									traversePropertyDiffs(schemaName, operation, path, mod.Diff.PropertiesDiff.Modified, &result, config, operationsSources)
+								}
+							}
+						}
 					}
 				}
 			}
@@ -39,37 +51,11 @@ func PropertyDeprecationCheck(diffReport *diff.Diff, operationsSources *diff.Ope
 	return result
 }
 
-// newPropertyApiChange creates a Change for property deprecation with safe dummy values
-
-func traversePropertyDiffs(schemaName, parentPath string, propertyDiffs map[string]*diff.SchemaDiff, result *Changes, config *Config, operationsSources *diff.OperationsSourcesMap) {
+func traversePropertyDiffs(schemaName, operation, endpointPath string, propertyDiffs map[string]*diff.SchemaDiff, result *Changes, config *Config, operationsSources *diff.OperationsSourcesMap) {
 	for propertyName, propertyDiff := range propertyDiffs {
+		// Only use propertyName and nested property path, not endpointPath prefix
 		fullPath := propertyName
-		if parentPath != "" {
-			fullPath = parentPath + "." + propertyName
-		}
-
-		// Recursively check nested properties in composed schemas
-		for idx, composition := range []*diff.SubschemasDiff{propertyDiff.AllOfDiff, propertyDiff.OneOfDiff, propertyDiff.AnyOfDiff} {
-			if composition != nil && composition.Modified != nil {
-				var compType string
-				switch idx {
-				case 0:
-					compType = "allOf"
-				case 1:
-					compType = "oneOf"
-				case 2:
-					compType = "anyOf"
-				}
-				println("[DeprecationCheck] Traversing ", compType, " branch for property:", fullPath, "in schema:", schemaName)
-				for _, mod := range composition.Modified {
-					if mod.Diff != nil && mod.Diff.PropertiesDiff != nil && mod.Diff.PropertiesDiff.Modified != nil {
-						traversePropertyDiffs(schemaName, fullPath, mod.Diff.PropertiesDiff.Modified, result, config, operationsSources)
-					}
-				}
-			}
-		}
 		if propertyDiff.DeprecatedDiff != nil && propertyDiff.DeprecatedDiff.To == true && (propertyDiff.DeprecatedDiff.From == nil || propertyDiff.DeprecatedDiff.From == false) {
-			println("[DeprecationCheck] Property deprecated:", fullPath, "in schema:", schemaName)
 			*result = append(*result, NewApiChange(
 				PropertyDeprecatedId,
 				config,
@@ -77,14 +63,13 @@ func traversePropertyDiffs(schemaName, parentPath string, propertyDiffs map[stri
 				"",
 				operationsSources,
 				nil,
-				schemaName,
-				fullPath,
+				operation,
+				endpointPath,
 			))
 		}
 		// Recursively check nested object properties
 		if propertyDiff.PropertiesDiff != nil && propertyDiff.PropertiesDiff.Modified != nil {
-			println("[DeprecationCheck] Traversing nested object properties for:", fullPath, "in schema:", schemaName)
-			traversePropertyDiffs(schemaName, fullPath, propertyDiff.PropertiesDiff.Modified, result, config, operationsSources)
+			traversePropertyDiffs(schemaName, operation, endpointPath, propertyDiff.PropertiesDiff.Modified, result, config, operationsSources)
 		}
 	}
 }
