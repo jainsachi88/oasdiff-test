@@ -26,6 +26,13 @@ api-sunset-date-too-small: "sunset date %s is too small, must be at least %s day
 endpoint-added: endpoint added
 endpoint-deprecated: endpoint deprecated
 endpoint-reactivated: endpoint reactivated
+property-deprecated-description: property deprecated
+property-deprecated-sunset-missing-description: property deprecated without sunset date
+property-deprecated-sunset-parse-description: property deprecated with sunset date
+property-sunset-date-too-small: "property %s of schema %s sunset date %s is too small"
+property-sunset-date-too-small-description: property sunset date is too small
+property-reactivated: property reactivated
+property-reactivated-description: property reactivated (deprecation set to false)
 api-path-removed-without-deprecation: api path removed without deprecation
 api-path-removed-with-deprecation: api path removed with deprecation
 api-path-removed-before-sunset: api path removed before the sunset date %s
