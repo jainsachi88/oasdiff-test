@@ -73,6 +73,10 @@ func GetAllRules() BackwardCompatibilityRules {
 		newBackwardCompatibilityRule(PropertyDeprecatedId, INFO, PropertyDeprecationCheck, DirectionNone, LocationComponents, ActionChange),
 		newBackwardCompatibilityRule(PropertyDeprecatedSunsetMissingId, INFO, PropertyDeprecationCheck, DirectionNone, LocationComponents, ActionChange),
 		newBackwardCompatibilityRule(PropertyDeprecatedSunsetParseId, INFO, PropertyDeprecationCheck, DirectionNone, LocationComponents, ActionChange),
+		// Request property deprecation checks
+		newBackwardCompatibilityRule(RequestPropertyDeprecatedId, INFO, PropertyDeprecationCheck, DirectionRequest, LocationBody, ActionChange),
+		newBackwardCompatibilityRule(RequestPropertyDeprecatedSunsetMissingId, INFO, PropertyDeprecationCheck, DirectionRequest, LocationBody, ActionChange),
+		newBackwardCompatibilityRule(RequestPropertyDeprecatedParseId, INFO, PropertyDeprecationCheck, DirectionRequest, LocationBody, ActionChange),
 		// APIAddedCheck
 		newBackwardCompatibilityRule(EndpointAddedId, INFO, APIAddedCheck, DirectionNone, LocationNone, ActionAdd),
 		// APIComponentsSecurityUpdatedCheck
