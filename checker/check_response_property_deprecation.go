@@ -1,7 +1,6 @@
 package checker
 
 import (
-	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/oasdiff/oasdiff/diff"
 )
 
@@ -28,7 +27,7 @@ func ResponsePropertyDeprecationCheck(diffReport *diff.Diff, operationsSources *
 				continue
 			}
 			// Track reported properties to avoid duplicates per operation
-			reportedProperties := make(map[string]bool)
+			reportedProperties := make(map[string]*diff.SchemaDiff)
 			for _, responseDiff := range operationItem.ResponsesDiff.Modified {
 				if responseDiff.ContentDiff == nil {
 					continue
@@ -37,15 +36,46 @@ func ResponsePropertyDeprecationCheck(diffReport *diff.Diff, operationsSources *
 					if mediaTypeDiff.SchemaDiff == nil {
 						continue
 					}
-					checkResponsePropertyDeprecation(mediaTypeDiff.SchemaDiff, &result, config, operationsSources, operationItem.Revision, operation, path, reportedProperties)
+					// Collect all deprecated properties, deduplicating as we go
+					collectResponseDeprecatedProperties(mediaTypeDiff.SchemaDiff, reportedProperties)
 				}
+			}
+			// Report each unique property once
+			for propertyName, propertyDiff := range reportedProperties {
+				changeId, args := getResponsePropertyDeprecationId(propertyName, propertyDiff)
+				result = append(result, NewApiChange(
+					changeId,
+					config,
+					args,
+					"",
+					operationsSources,
+					operationItem.Revision,
+					operation,
+					path,
+				))
 			}
 		}
 	}
 	return result
 }
 
-func checkResponsePropertyDeprecation(schemaDiff *diff.SchemaDiff, result *Changes, config *Config, operationsSources *diff.OperationsSourcesMap, revision *openapi3.Operation, operation string, path string, reportedProperties map[string]bool) {
+func getResponsePropertyDeprecationId(propertyName string, propertyDiff *diff.SchemaDiff) (string, []any) {
+	if propertyDiff == nil || propertyDiff.Revision == nil {
+		return ResponsePropertyDeprecatedSunsetMissingId, []any{propertyName}
+	}
+	sunset, ok := getSunset(propertyDiff.Revision.Extensions)
+	if !ok {
+		return ResponsePropertyDeprecatedSunsetMissingId, []any{propertyName}
+	}
+	date, err := getSunsetDate(sunset)
+	if err != nil {
+		return ResponsePropertyDeprecatedParseId, []any{propertyName, err}
+	}
+	return ResponsePropertyDeprecatedId, []any{propertyName, date}
+}
+
+// collectResponseDeprecatedProperties collects all deprecated property names into the map
+func collectResponseDeprecatedProperties(schemaDiff *diff.SchemaDiff, reportedProperties map[string]*diff.SchemaDiff) {
 	if schemaDiff.PropertiesDiff != nil && schemaDiff.PropertiesDiff.Modified != nil {
 		for propertyName, propertyDiff := range schemaDiff.PropertiesDiff.Modified {
 			if propertyDiff.DeprecatedDiff == nil {
@@ -57,62 +87,10 @@ func checkResponsePropertyDeprecation(schemaDiff *diff.SchemaDiff, result *Chang
 			if propertyDiff.DeprecatedDiff.From != nil && propertyDiff.DeprecatedDiff.From != false {
 				continue
 			}
-			// Skip if already reported
-			if reportedProperties[propertyName] {
-				continue
+			// Add to map (automatically deduplicates)
+			if _, exists := reportedProperties[propertyName]; !exists {
+				reportedProperties[propertyName] = propertyDiff
 			}
-			reportedProperties[propertyName] = true
-
-			var extensions map[string]interface{}
-			if propertyDiff.Revision != nil {
-				extensions = propertyDiff.Revision.Extensions
-			}
-			stability, err := getStabilityLevel(extensions)
-			if err != nil {
-				continue
-			}
-			deprecationDays := getDeprecationDays(config, stability)
-			sunset, ok := getSunset(extensions)
-
-			if !ok {
-				if deprecationDays > 0 {
-					*result = append(*result, NewApiChange(
-						ResponsePropertyDeprecatedSunsetMissingId,
-						config,
-						[]any{propertyName},
-						"",
-						operationsSources,
-						revision,
-						operation,
-						path,
-					))
-				}
-				continue
-			}
-			_, err = getSunsetDate(sunset)
-			if err != nil {
-				*result = append(*result, NewApiChange(
-					ResponsePropertyDeprecatedParseId,
-					config,
-					[]any{propertyName, err},
-					"",
-					operationsSources,
-					revision,
-					operation,
-					path,
-				))
-				continue
-			}
-			*result = append(*result, NewApiChange(
-				ResponsePropertyDeprecatedId,
-				config,
-				[]any{propertyName},
-				"",
-				operationsSources,
-				revision,
-				operation,
-				path,
-			))
 		}
 	}
 
@@ -121,7 +99,7 @@ func checkResponsePropertyDeprecation(schemaDiff *diff.SchemaDiff, result *Chang
 		if composition != nil && composition.Modified != nil {
 			for _, mod := range composition.Modified {
 				if mod.Diff != nil {
-					checkResponsePropertyDeprecation(mod.Diff, result, config, operationsSources, revision, operation, path, reportedProperties)
+					collectResponseDeprecatedProperties(mod.Diff, reportedProperties)
 				}
 			}
 		}
