@@ -29,6 +29,9 @@ endpoint-reactivated: endpoint reactivated
 request-property-deprecated-description: "request property deprecated with sunset date"
 request-property-deprecated-sunset-missing-description: "request property was deprecated without sunset date"
 request-property-deprecated-sunset-parse-description: "request property deprecated with sunset date"
+response-property-deprecated-description: "response property deprecated with sunset date"
+response-property-deprecated-sunset-missing-description: "response property was deprecated without sunset date"
+response-property-deprecated-sunset-parse-description: "response property deprecated with sunset date"
 property-deprecated-description: property deprecated
 property-deprecated-sunset-missing-description: property deprecated without sunset date
 property-deprecated-sunset-parse-description: property deprecated with sunset date
