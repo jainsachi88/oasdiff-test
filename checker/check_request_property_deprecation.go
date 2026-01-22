@@ -10,6 +10,7 @@ const (
 	RequestPropertyDeprecatedParseId         = "request-property-deprecated-sunset-parse"
 )
 
+// RequestPropertyDeprecationCheck detects deprecated properties in request bodies
 func RequestPropertyDeprecationCheck(diffReport *diff.Diff, operationsSources *diff.OperationsSourcesMap, config *Config) Changes {
 	result := make(Changes, 0)
 	if diffReport.PathsDiff == nil {

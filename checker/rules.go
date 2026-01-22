@@ -69,10 +69,6 @@ type BackwardCompatibilityRules []BackwardCompatibilityRule
 
 func GetAllRules() BackwardCompatibilityRules {
 	return BackwardCompatibilityRules{
-		// Schema/property deprecation checks
-		newBackwardCompatibilityRule(PropertyDeprecatedId, INFO, PropertyDeprecationCheck, DirectionNone, LocationComponents, ActionChange),
-		newBackwardCompatibilityRule(PropertyDeprecatedSunsetMissingId, INFO, PropertyDeprecationCheck, DirectionNone, LocationComponents, ActionChange),
-		newBackwardCompatibilityRule(PropertyDeprecatedSunsetParseId, INFO, PropertyDeprecationCheck, DirectionNone, LocationComponents, ActionChange),
 		// Request property deprecation checks
 		newBackwardCompatibilityRule(RequestPropertyDeprecatedId, INFO, RequestPropertyDeprecationCheck, DirectionRequest, LocationBody, ActionChange),
 		newBackwardCompatibilityRule(RequestPropertyDeprecatedSunsetMissingId, INFO, RequestPropertyDeprecationCheck, DirectionRequest, LocationBody, ActionChange),

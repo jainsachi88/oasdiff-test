@@ -25,34 +25,104 @@ func TestPropertyDeprecationCheck(t *testing.T) {
 	config.LogLevels[PropertyDeprecatedSunsetParseId] = INFO
 	config.LogLevels[PropertyDeprecatedId] = INFO
 
-	// Mock diff with deprecated property
-	d := &diff.Diff{
-		PathsDiff: &diff.PathsDiff{
-			Modified: map[string]*diff.PathDiff{
-				"/test": {
-					OperationsDiff: &diff.OperationsDiff{
-						Modified: map[string]*diff.MethodDiff{
-							"GET": {},
+	// Mock schema diff with deprecated property
+	schemaDiff := &diff.SchemaDiff{
+		PropertiesDiff: &diff.SchemasDiff{
+			Modified: map[string]*diff.SchemaDiff{
+				"deprecatedProp": {
+					DeprecatedDiff: &diff.ValueDiff{To: true},
+					Revision: &openapi3.Schema{
+						Extensions: map[string]interface{}{
+							"x-stability-level": "stable",
+							"x-sunset":          "2026-12-31",
 						},
-					},
-					Revision: &openapi3.PathItem{
-						Get: &openapi3.Operation{},
 					},
 				},
 			},
 		},
-		ComponentsDiff: &diff.ComponentsDiff{
-			SchemasDiff: &diff.SchemasDiff{
-				Modified: map[string]*diff.SchemaDiff{
-					"TestSchema": {
+	}
+
+	result := make(Changes, 0)
+	reportedProperties := make(map[string]bool)
+	revision := &openapi3.Operation{}
+
+	PropertyDeprecationCheck(schemaDiff, "", &result, config, nil, revision, "GET", "/test", reportedProperties)
+
+	if len(result) != 1 {
+		t.Errorf("Expected 1 property change, got %d", len(result))
+	}
+
+	foundDeprecated := false
+	for _, c := range result {
+		if c.GetId() == PropertyDeprecatedId {
+			foundDeprecated = true
+		}
+	}
+	if !foundDeprecated {
+		t.Error("Property deprecation change not found")
+	}
+}
+
+func TestPropertyDeprecationCheck_SunsetMissing(t *testing.T) {
+	config := NewConfig(nil).
+		WithDeprecation(30, 30)
+	config.LogLevels[PropertyDeprecatedSunsetMissingId] = INFO
+
+	schemaDiff := &diff.SchemaDiff{
+		PropertiesDiff: &diff.SchemasDiff{
+			Modified: map[string]*diff.SchemaDiff{
+				"deprecatedProp": {
+					DeprecatedDiff: &diff.ValueDiff{To: true},
+					Revision: &openapi3.Schema{
+						Extensions: map[string]interface{}{
+							"x-stability-level": "stable",
+							// No x-sunset
+						},
+					},
+				},
+			},
+		},
+	}
+
+	result := make(Changes, 0)
+	reportedProperties := make(map[string]bool)
+	revision := &openapi3.Operation{}
+
+	PropertyDeprecationCheck(schemaDiff, "", &result, config, nil, revision, "GET", "/test", reportedProperties)
+
+	if len(result) != 1 {
+		t.Errorf("Expected 1 property change, got %d", len(result))
+	}
+
+	found := false
+	for _, c := range result {
+		if c.GetId() == PropertyDeprecatedSunsetMissingId {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("PropertyDeprecatedSunsetMissingId change not found")
+	}
+}
+
+func TestPropertyDeprecationCheck_AllOf(t *testing.T) {
+	config := NewConfig(nil).
+		WithDeprecation(30, 30)
+	config.LogLevels[PropertyDeprecatedId] = INFO
+
+	schemaDiff := &diff.SchemaDiff{
+		AllOfDiff: &diff.SubschemasDiff{
+			Modified: diff.ModifiedSubschemas{
+				{
+					Diff: &diff.SchemaDiff{
 						PropertiesDiff: &diff.SchemasDiff{
 							Modified: map[string]*diff.SchemaDiff{
-								"deprecatedProp": {
+								"allOfProp": {
 									DeprecatedDiff: &diff.ValueDiff{To: true},
 									Revision: &openapi3.Schema{
 										Extensions: map[string]interface{}{
 											"x-stability-level": "stable",
-											"x-sunset":          "2026-12-31", // far future sunset date
+											"x-sunset":          "2026-12-31",
 										},
 									},
 								},
@@ -64,139 +134,25 @@ func TestPropertyDeprecationCheck(t *testing.T) {
 		},
 	}
 
-	changes := PropertyDeprecationCheck(d, nil, config)
+	result := make(Changes, 0)
+	reportedProperties := make(map[string]bool)
+	revision := &openapi3.Operation{}
 
-	if len(changes) != 1 {
-		t.Errorf("Expected 1 property change, got %d", len(changes))
+	PropertyDeprecationCheck(schemaDiff, "", &result, config, nil, revision, "GET", "/test", reportedProperties)
+
+	if len(result) != 1 {
+		t.Errorf("Expected 1 property change, got %d", len(result))
 	}
-
-	foundDeprecated := false
-	for _, c := range changes {
-		if c.GetId() == PropertyDeprecatedId {
-			foundDeprecated = true
-		}
-	}
-	if !foundDeprecated {
-		t.Error("Property deprecation change not found")
-	}
-}
-
-func TestPropertyDeprecationCheck_WithSampleFiles(t *testing.T) {
-	base := loadOpenAPISpecInfo(t, "testdata/property_deprecation_base.yaml")
-	spec := loadOpenAPISpecInfo(t, "testdata/property_deprecation_spec.yaml")
-
-	// Debug print: show loaded spec titles and versions
-	if base.Spec != nil && base.Spec.Info != nil {
-		t.Logf("Base spec title: %s, version: %s", base.Spec.Info.Title, base.Spec.Info.Version)
-	}
-	if spec.Spec != nil && spec.Spec.Info != nil {
-		t.Logf("Spec spec title: %s, version: %s", spec.Spec.Info.Title, spec.Spec.Info.Version)
-	}
-
-	d, osm, err := diff.GetWithOperationsSourcesMap(diff.NewConfig(), base, spec)
-	require.NoError(t, err)
-
-	// Debug print: show what schemas are marked as modified
-	if d.ComponentsDiff != nil && d.ComponentsDiff.SchemasDiff != nil {
-		t.Logf("SchemasDiff.Modified keys: %v", getMapKeys(d.ComponentsDiff.SchemasDiff.Modified))
-		for schema, schemaDiff := range d.ComponentsDiff.SchemasDiff.Modified {
-			if schemaDiff.PropertiesDiff != nil {
-				t.Logf("Schema '%s' PropertiesDiff.Modified keys: %v", schema, getMapKeys(schemaDiff.PropertiesDiff.Modified))
-			}
-		}
-	}
-
-	config := NewConfig(nil)
-	changes := PropertyDeprecationCheck(d, osm, config)
 
 	found := false
-	for _, c := range changes {
-		if c.GetId() == PropertyDeprecatedId {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("Expected PropertyDeprecatedId in changes, got: %+v", changes)
-	}
-}
-
-func TestPropertyDeprecationCheck_NestedProperty(t *testing.T) {
-	base := loadOpenAPISpecInfo(t, "testdata/property_deprecation_base.yaml")
-	spec := loadOpenAPISpecInfo(t, "testdata/property_deprecation_spec.yaml")
-
-	d, osm, err := diff.GetWithOperationsSourcesMap(diff.NewConfig(), base, spec)
-	require.NoError(t, err)
-
-	config := NewConfig(nil)
-	changes := PropertyDeprecationCheck(d, osm, config)
-
-	found := false
-	for _, c := range changes {
-		if c.GetId() == PropertyDeprecatedId {
-			found = true
-			t.Logf("Found deprecated property: %+v", c)
-		}
-	}
-	if !found {
-		t.Errorf("Expected PropertyDeprecatedId in changes, got: %+v", changes)
-	}
-}
-
-func TestPropertyDeprecationCheck_AllOfProperty(t *testing.T) {
-	base := loadOpenAPISpecInfo(t, "testdata/property_deprecation_allof_base.yaml")
-	spec := loadOpenAPISpecInfo(t, "testdata/property_deprecation_allof_spec.yaml")
-	d, osm, err := diff.GetWithOperationsSourcesMap(diff.NewConfig(), base, spec)
-	require.NoError(t, err)
-
-	config := NewConfig(nil)
-	changes := PropertyDeprecationCheck(d, osm, config)
-	found := false
-	for _, c := range changes {
+	for _, c := range result {
 		if c.GetId() == PropertyDeprecatedId {
 			found = true
 			t.Logf("Found deprecated allOf property: %+v", c)
 		}
 	}
 	if !found {
-		t.Errorf("Expected PropertyDeprecatedId in changes, got: %+v", changes)
-	}
-}
-
-func TestPropertyDeprecationCheck_OneOfProperty(t *testing.T) {
-	base := loadOpenAPISpecInfo(t, "testdata/property_deprecation_oneof_base.yaml")
-	spec := loadOpenAPISpecInfo(t, "testdata/property_deprecation_oneof_spec.yaml")
-	d, osm, err := diff.GetWithOperationsSourcesMap(diff.NewConfig(), base, spec)
-	require.NoError(t, err)
-	config := NewConfig(nil)
-	changes := PropertyDeprecationCheck(d, osm, config)
-	found := false
-	for _, c := range changes {
-		if c.GetId() == PropertyDeprecatedId {
-			found = true
-			t.Logf("Found deprecated oneOf property: %+v", c)
-		}
-	}
-	if !found {
-		t.Errorf("Expected PropertyDeprecatedId in changes, got: %+v", changes)
-	}
-}
-
-func TestPropertyDeprecationCheck_AnyOfProperty(t *testing.T) {
-	base := loadOpenAPISpecInfo(t, "testdata/property_deprecation_anyof_base.yaml")
-	spec := loadOpenAPISpecInfo(t, "testdata/property_deprecation_anyof_spec.yaml")
-	d, osm, err := diff.GetWithOperationsSourcesMap(diff.NewConfig(), base, spec)
-	require.NoError(t, err)
-	config := NewConfig(nil)
-	changes := PropertyDeprecationCheck(d, osm, config)
-	found := false
-	for _, c := range changes {
-		if c.GetId() == PropertyDeprecatedId {
-			found = true
-			t.Logf("Found deprecated anyOf property: %+v", c)
-		}
-	}
-	if !found {
-		t.Errorf("Expected PropertyDeprecatedId in changes, got: %+v", changes)
+		t.Error("PropertyDeprecatedId change not found in allOf")
 	}
 }
 

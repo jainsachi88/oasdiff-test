@@ -13,13 +13,8 @@ const (
 	PropertyDeprecatedId              = "property-deprecated"
 )
 
-// PropertyDeprecationCheck is disabled - use RequestPropertyDeprecationCheck and ResponsePropertyDeprecationCheck instead
-// This function is kept for backward compatibility but returns empty results
-func PropertyDeprecationCheck(diffReport *diff.Diff, operationsSources *diff.OperationsSourcesMap, config *Config) Changes {
-	return make(Changes, 0)
-}
-
-func checkSchemaPropertyDeprecation(schemaDiff *diff.SchemaDiff, parentPath string, result *Changes, config *Config, operationsSources *diff.OperationsSourcesMap, revision *openapi3.Operation, operation string, path string, reportedProperties map[string]bool) {
+// PropertyDeprecationCheck checks for deprecated properties in a schema
+func PropertyDeprecationCheck(schemaDiff *diff.SchemaDiff, parentPath string, result *Changes, config *Config, operationsSources *diff.OperationsSourcesMap, revision *openapi3.Operation, operation string, path string, reportedProperties map[string]bool) {
 	if schemaDiff.PropertiesDiff != nil && schemaDiff.PropertiesDiff.Modified != nil {
 		for propertyName, propertyDiff := range schemaDiff.PropertiesDiff.Modified {
 			fullPath := propertyName
@@ -86,7 +81,7 @@ func checkSchemaPropertyDeprecation(schemaDiff *diff.SchemaDiff, parentPath stri
 			}
 			// Recursively check nested object properties
 			if propertyDiff.PropertiesDiff != nil && propertyDiff.PropertiesDiff.Modified != nil {
-				checkSchemaPropertyDeprecation(propertyDiff, fullPath, result, config, operationsSources, revision, operation, path, reportedProperties)
+				PropertyDeprecationCheck(propertyDiff, fullPath, result, config, operationsSources, revision, operation, path, reportedProperties)
 			}
 		}
 	}
@@ -96,7 +91,7 @@ func checkSchemaPropertyDeprecation(schemaDiff *diff.SchemaDiff, parentPath stri
 		if composition != nil && composition.Modified != nil {
 			for _, mod := range composition.Modified {
 				if mod.Diff != nil {
-					checkSchemaPropertyDeprecation(mod.Diff, parentPath, result, config, operationsSources, revision, operation, path, reportedProperties)
+					PropertyDeprecationCheck(mod.Diff, parentPath, result, config, operationsSources, revision, operation, path, reportedProperties)
 				}
 			}
 		}

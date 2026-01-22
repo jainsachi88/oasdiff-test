@@ -10,6 +10,7 @@ const (
 	ResponsePropertyDeprecatedParseId         = "response-property-deprecated-sunset-parse"
 )
 
+// ResponsePropertyDeprecationCheck detects deprecated properties in response bodies
 func ResponsePropertyDeprecationCheck(diffReport *diff.Diff, operationsSources *diff.OperationsSourcesMap, config *Config) Changes {
 	result := make(Changes, 0)
 	if diffReport.PathsDiff == nil {
