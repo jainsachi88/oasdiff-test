@@ -2,17 +2,25 @@ openapi: 3.0.0
 info:
   title: Property Deprecation Nested Test
   version: 1.0.1
-paths: {}
+paths:
+  /test:
+    get:
+      summary: Test endpoint
+      operationId: getTest
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestSchema'
 components:
   schemas:
     TestSchema:
       type: object
       properties:
-        parent:
-          type: object
-          properties:
-            nestedProp:
-              type: string
-              description: A nested property
-              deprecated: true
-              x-sunset: "2099-12-31"
+        testProp:
+          type: string
+          description: A test property
+          deprecated: true
+          x-sunset: "2099-12-31"

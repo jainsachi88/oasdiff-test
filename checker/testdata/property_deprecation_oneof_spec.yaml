@@ -2,7 +2,18 @@ openapi: 3.0.0
 info:
   title: Property Deprecation OneOf Test
   version: 1.0.1
-paths: {}
+paths:
+  /test:
+    get:
+      summary: Test endpoint
+      operationId: getTest
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OneOfSchema'
 components:
   schemas:
     OneOfSchema:

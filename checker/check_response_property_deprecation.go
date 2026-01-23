@@ -1,0 +1,108 @@
+package checker
+
+import (
+	"github.com/oasdiff/oasdiff/diff"
+)
+
+const (
+	ResponsePropertyDeprecatedId              = "response-property-deprecated"
+	ResponsePropertyDeprecatedSunsetMissingId = "response-property-deprecated-sunset-missing"
+	ResponsePropertyDeprecatedParseId         = "response-property-deprecated-sunset-parse"
+)
+
+// ResponsePropertyDeprecationCheck detects deprecated properties in response bodies
+func ResponsePropertyDeprecationCheck(diffReport *diff.Diff, operationsSources *diff.OperationsSourcesMap, config *Config) Changes {
+	result := make(Changes, 0)
+	if diffReport.PathsDiff == nil {
+		return result
+	}
+	for path, pathItem := range diffReport.PathsDiff.Modified {
+		if pathItem.OperationsDiff == nil {
+			continue
+		}
+		for operation, operationItem := range pathItem.OperationsDiff.Modified {
+			if operationItem.ResponsesDiff == nil {
+				continue
+			}
+			if operationItem.ResponsesDiff.Modified == nil {
+				continue
+			}
+			// Track reported properties to avoid duplicates per operation
+			reportedProperties := make(map[string]*diff.SchemaDiff)
+			for _, responseDiff := range operationItem.ResponsesDiff.Modified {
+				if responseDiff.ContentDiff == nil {
+					continue
+				}
+				for _, mediaTypeDiff := range responseDiff.ContentDiff.MediaTypeModified {
+					if mediaTypeDiff.SchemaDiff == nil {
+						continue
+					}
+					// Collect all deprecated properties, deduplicating as we go
+					collectResponseDeprecatedProperties(mediaTypeDiff.SchemaDiff, reportedProperties)
+				}
+			}
+			// Report each unique property once
+			for propertyName, propertyDiff := range reportedProperties {
+				changeId, args := getResponsePropertyDeprecationId(propertyName, propertyDiff)
+				result = append(result, NewApiChange(
+					changeId,
+					config,
+					args,
+					"",
+					operationsSources,
+					operationItem.Revision,
+					operation,
+					path,
+				))
+			}
+		}
+	}
+	return result
+}
+
+func getResponsePropertyDeprecationId(propertyName string, propertyDiff *diff.SchemaDiff) (string, []any) {
+	if propertyDiff == nil || propertyDiff.Revision == nil {
+		return ResponsePropertyDeprecatedSunsetMissingId, []any{propertyName}
+	}
+	sunset, ok := getSunset(propertyDiff.Revision.Extensions)
+	if !ok {
+		return ResponsePropertyDeprecatedSunsetMissingId, []any{propertyName}
+	}
+	date, err := getSunsetDate(sunset)
+	if err != nil {
+		return ResponsePropertyDeprecatedParseId, []any{propertyName, err}
+	}
+	return ResponsePropertyDeprecatedId, []any{propertyName, date}
+}
+
+// collectResponseDeprecatedProperties collects all deprecated property names into the map
+func collectResponseDeprecatedProperties(schemaDiff *diff.SchemaDiff, reportedProperties map[string]*diff.SchemaDiff) {
+	if schemaDiff.PropertiesDiff != nil && schemaDiff.PropertiesDiff.Modified != nil {
+		for propertyName, propertyDiff := range schemaDiff.PropertiesDiff.Modified {
+			if propertyDiff.DeprecatedDiff == nil {
+				continue
+			}
+			if propertyDiff.DeprecatedDiff.To != true {
+				continue
+			}
+			if propertyDiff.DeprecatedDiff.From != nil && propertyDiff.DeprecatedDiff.From != false {
+				continue
+			}
+			// Add to map (automatically deduplicates)
+			if _, exists := reportedProperties[propertyName]; !exists {
+				reportedProperties[propertyName] = propertyDiff
+			}
+		}
+	}
+
+	// Recursively check nested properties in composed schemas (allOf, oneOf, anyOf)
+	for _, composition := range []*diff.SubschemasDiff{schemaDiff.AllOfDiff, schemaDiff.OneOfDiff, schemaDiff.AnyOfDiff} {
+		if composition != nil && composition.Modified != nil {
+			for _, mod := range composition.Modified {
+				if mod.Diff != nil {
+					collectResponseDeprecatedProperties(mod.Diff, reportedProperties)
+				}
+			}
+		}
+	}
+}
